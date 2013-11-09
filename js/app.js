@@ -6,15 +6,18 @@ var canvas = document.getElementById("canvas"),
     lineThickness = 1,
     thicknessEase = 0.5;
 
-var w = 600;
-var h = 600; 
+var buffer = document.getElementById("buffer"),
+    bufferctx = buffer.getContext("2d");
+
+var w = 1200;
+var h = 1600; 
 var sketch = document.getElementById("sketch");
 var sketchctx = sketch.getContext("2d");
 
 var maxThickness = 3;
 
 var penStyle = "rgba(0,0,0,0.5)";
-var backStyle = "rgba(255,255,255,1)";
+var backStyle = "rgba(240,240,240,1)";
 
 
 var strokes = [];
@@ -24,19 +27,26 @@ var undoLimit = 16;
 
 var redoStack = [];
 
-resizeCanvas();
-drawBackground(sketchctx);
+$(document).ready(function() { 
+    resizeCanvas();
+    drawBackground(sketchctx);
+});
 
-window.addEventListener('resize',resizeCanvas,false);
+window.addEventListener('resize',resizeCanvas(),false);
 
 function resizeCanvas() {
-    w = window.innerWidth;  // your code here
-    h = window.innerHeight; // your code here
+    // w = window.innerWidth;
+    // h = window.innerHeight;
 
     canvas.width = w;
     canvas.height = h;
     sketch.width = w;
     sketch.height = h;
+
+    buffer.width = w;
+    buffer.height = h;
+
+    $(".surface").css("margin-left", function() { return -w/2; });
 }
 
 function stroke() {
@@ -59,7 +69,7 @@ function drawBackground(ctx) {
     ctx.fillRect(0, 0, w, h);
 }
 
-function drawStroke(ctx,x,y,thickness)
+function drawStyle(ctx,x,y,thickness)
 {
     // THIN PEN //
     //ctx.fillRect(x,y,thickness,thickness);
@@ -73,6 +83,14 @@ function drawStroke(ctx,x,y,thickness)
     //fillCircle(ctx,x,y,thickness);
 }
 
+function drawStroke(ctx, stroke)
+{
+    for (var i = 0; i < stroke.x.length; i += 1)
+    {
+        drawStyle(ctx,stroke.x[i],stroke.y[i],stroke.thickness[i]);
+    }
+}
+
 function drawAllStrokes(ctx){
     ctx.clearRect(0,0,w,h);
     drawBackground(ctx);
@@ -80,11 +98,15 @@ function drawAllStrokes(ctx){
     for (var i = 0; i < strokes.length; i += 1)
     {
         var s = strokes[i];
-        for (var j = 0; j < s.x.length; j+=1)
-        {
-            //draw the stroke
-            drawStroke(ctx,s.x[j],s.y[j],s.thickness[j]);
-        }
+        drawStroke(ctx, s);
+    }
+}
+function drawAllStrokesNoClear(ctx){
+    ctx.fillStyle = penStyle;
+    for (var i = 0; i < strokes.length; i += 1)
+    {
+        var s = strokes[i];
+        drawStroke(ctx, s);
     }
 }
 function undoStroke() {
@@ -92,7 +114,8 @@ function undoStroke() {
     {
         drawBackground(sketchctx);
         redoStack.push(strokes.pop());
-        drawAllStrokes(sketchctx);
+        sketchctx.drawImage(buffer,0,0);
+        drawAllStrokesNoClear(sketchctx);
     }
 }
     
@@ -102,7 +125,18 @@ function addStroke() {
         redoStack = [];
         strokes.push(currentStroke);
 
-        drawAllStrokes(sketchctx);
+        if (strokes.length > undoLimit)
+        {
+            strokes.reverse();
+            var oldStroke = strokes.pop();
+            strokes.reverse();
+
+            drawStroke(bufferctx,oldStroke);
+        }
+        else
+        {
+        }
+        //drawAllStrokes(sketchctx);
     }
     
 }
@@ -111,11 +145,11 @@ function redoStroke() {
     {
         drawBackground(sketchctx);
         strokes.push(redoStack.pop());
-        drawAllStrokes(sketchctx);
+        sketchctx.drawImage(buffer,0,0);
+        drawAllStrokesNoClear(sketchctx);
     }
     
 }
-
 
 canvas.onmousedown = function(e) {
     painting = true;
@@ -202,12 +236,12 @@ canvas.onmousemove = function(e) {
                 currentStroke.x.push(y);
                 currentStroke.y.push(x);
                 currentStroke.thickness.push(lineThickness);
-                drawStroke(ctx, y, x, lineThickness );
+                drawStyle(ctx, y, x, lineThickness );
             } else {
                 currentStroke.x.push(x);
                 currentStroke.y.push(y);
                 currentStroke.thickness.push(lineThickness);
-                drawStroke(ctx, x, y, lineThickness );
+                drawStyle(ctx, x, y, lineThickness );
             }
             
             error += de;
