@@ -31,6 +31,8 @@
     
     <canvas id="sketch" style="position:absolute;"></canvas>
     <canvas id="canvas" style="position:absolute;"></canvas>
+
+    
    
    	<!--Javascript-->
    	
@@ -41,11 +43,9 @@
 	<script>
 		Mousetrap.bind('ctrl+z', function(e) {
 		    undoStroke();
-		    console.log("undo");
 		});
 		Mousetrap.bind('ctrl+y', function(e) {
 		    redoStroke();
-		    console.log("redo");
 		});
 	</script>
 

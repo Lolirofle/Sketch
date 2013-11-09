@@ -13,15 +13,19 @@ var sketchctx = sketch.getContext("2d");
 
 var maxThickness = 3;
 
+var penStyle = "rgba(0,0,0,0.5)";
+var backStyle = "rgba(255,255,255,1)";
+
+
 var strokes = [];
 var currentStroke;
 
-var penStyle = "rgba(0,0,0,0.5)";
-var backStyle = "rgba(255,255,255,1)"
+var undoLimit = 16;
 
 var redoStack = [];
 
 resizeCanvas();
+drawBackground(sketchctx);
 
 window.addEventListener('resize',resizeCanvas,false);
 
@@ -33,9 +37,6 @@ function resizeCanvas() {
     canvas.height = h;
     sketch.width = w;
     sketch.height = h;
-
-    drawBackground(sketchctx);
-    drawAllStrokes(sketchctx);
 }
 
 function stroke() {
@@ -53,23 +54,9 @@ function fillCircle(ctx,x,y,radius)
 }
 
 function drawBackground(ctx) {
+    ctx.clearRect(0,0,w,h);
     ctx.fillStyle = backStyle;
     ctx.fillRect(0, 0, w, h);
-}
-
-function drawAllStrokes(ctx){
-    ctx.clearRect(0,0,w,h);
-    drawBackground(ctx);
-    ctx.fillStyle = penStyle;
-    for (var i = 0; i < strokes.length; i += 1)
-    {
-        var s = strokes[i];
-        for (var j = 0; j < s.x.length; j+=1)
-        {
-            //draw the stroke
-            drawStroke(ctx,s.x[j],s.y[j],s.thickness[j]);
-        }
-    }
 }
 
 function drawStroke(ctx,x,y,thickness)
@@ -86,9 +73,24 @@ function drawStroke(ctx,x,y,thickness)
     //fillCircle(ctx,x,y,thickness);
 }
 
+function drawAllStrokes(ctx){
+    ctx.clearRect(0,0,w,h);
+    drawBackground(ctx);
+    ctx.fillStyle = penStyle;
+    for (var i = 0; i < strokes.length; i += 1)
+    {
+        var s = strokes[i];
+        for (var j = 0; j < s.x.length; j+=1)
+        {
+            //draw the stroke
+            drawStroke(ctx,s.x[j],s.y[j],s.thickness[j]);
+        }
+    }
+}
 function undoStroke() {
     if (strokes.length>0)
     {
+        drawBackground(sketchctx);
         redoStack.push(strokes.pop());
         drawAllStrokes(sketchctx);
     }
@@ -99,6 +101,7 @@ function addStroke() {
     {
         redoStack = [];
         strokes.push(currentStroke);
+
         drawAllStrokes(sketchctx);
     }
     
@@ -106,15 +109,17 @@ function addStroke() {
 function redoStroke() {
     if (redoStack.length>0)
     {
+        drawBackground(sketchctx);
         strokes.push(redoStack.pop());
         drawAllStrokes(sketchctx);
     }
     
 }
 
+
 canvas.onmousedown = function(e) {
     painting = true;
-
+ 
     currentStroke = new stroke();
     
     ctx.fillStyle = penStyle;
@@ -125,11 +130,8 @@ canvas.onmousedown = function(e) {
 canvas.onmouseup = function(e){
     painting = false;
 
+    sketchctx.drawImage(canvas,0,0);
     addStroke();
-   
-    drawAllStrokes(sketchctx);
-
-    //sketch.drawImage(ctx);
 
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
@@ -214,7 +216,6 @@ canvas.onmousemove = function(e) {
                 error -= 1.0;
             }
         }
-
 
 
         lastX = mouseX;
