@@ -18,6 +18,9 @@
 	<link rel="stylesheet" href="css/normalize.css">
     
     <link rel="stylesheet" href="css/bootstrap.min.css"> 
+    <link rel="stylesheet" href="css/font-awesome.min.css"> 
+
+    <link rel="stylesheet" href="js/toolbars/jquery.toolbars.css">
    
     <link rel="stylesheet" href="css/style.css"> 
 
@@ -27,17 +30,61 @@
         <p class="chromeframe">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chromeframe/?redirect=true">activate Google Chrome Frame</a> to improve your experience.</p>
     <![endif]-->
 
-    <!-- Add your site or application content here -->
+    <!-- Actual Drawing Surface -->
     
     <canvas id="sketch" class="surface" style="position:absolute;"></canvas>
-
-    <canvas id="buffer" class="surface" style="position:absolute;"></canvas> 
-   
+    <canvas id="buffer" class="surface" style="position:absolute;display:none;"></canvas> 
     <canvas id="canvas" class="surface" style="position:absolute;"></canvas>
 
+    <!-- Toolbar -->
+    <div id="toolbar">
+    	<div class="btn-group-vertical">
+    		<button type="button" id="pen" class="btn btn-default tool-icon active" onclick="pen_tool()"><i class="fa fa-pencil"></i></button>
+    		<button type="button" id="eraser" class="btn btn-default tool-icon" onclick="eraser_tool()"><i class="fa fa-eraser"></i></button>
+    	</div>
+    </div>
+
+    <div id="filemenu">
+    	<div id="file"><i class="fa fa-bars"></i></div>
+    </div>
+
+    <div id="file-toolbar" style="display:none">
+    	<a href="#" onclick="newCanvas();"><i class="fa fa-file"></i></a>
+    	<a href="#" onclick="loadCanvas(sketch);"><i class="fa fa-folder-open"></i></a>
+    	<a href="#"><i class="fa fa-save" onclick="saveCanvas(sketch);"></i></a>
+    	<a href="#" id="file-download" onclick="downloadImg(sketch, 'sketch.png');" download="sketch.png"><i class="fa fa-download"></i></a>
+    </div>
+
+
+    <!--Confirm new document-->
+    <div id="new-document-modal" class="modal fade">
+	  	<div class="modal-dialog">
+   			<div class="modal-content">
+				<div class="modal-header text-center">
+				    <h3>Confirm New Sketch</h3>
+				</div>
+				<div class="modal-body text-center">
+				    <p>Create a new sketch? Unsaved data will be lost.</p>
+				</div>
+				<div class="modal-footer text-right">
+				  	<button type="submit" class="btn btn-primary" id="create-new-document-button" data-dismiss="modal" aria-hidden="true">Create New Sketch</button>
+					<button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
+				</div>
+			</div>
+	  	</div>
+	</div>
 
    	<!--Javascript-->
    	<script type="text/javascript" src="js/vendor/jquery-1.9.0.min.js"></script>
+   	<script type="text/javascript" src="js/bootstrap.min.js"></script>
+
+   	<script type="text/javascript" src="js/jquery.bootstrap-growl.min.js"></script>
+
+   	<script src="js/database/IndexedDBShim.min.js"></script>
+	<script src="js/database/pouchdb.js"></script>
+	
+	<script src="js/Blob.js"></script>
+	<script src="js/filesaver.min.js"></script>
 	
 	<!--Application Scripts-->
 	<script type="text/javascript" src="js/app.js"></script>
@@ -48,6 +95,30 @@
 		});
 		Mousetrap.bind('ctrl+y', function(e) {
 		    redoStroke();
+		});
+		Mousetrap.bind('s', function(e) {
+		    tool = 1;
+		});
+		Mousetrap.bind('a', function(e) {
+		    tool = 0;
+		});
+	</script>
+
+	<script>
+		// with jQuery
+		$( "#canvas" ).mousedown(function(event){
+    		event.preventDefault();
+		});
+	</script>
+
+	<!-- Toolbar Scripts -->
+	<script type="text/javascript" src="js/toolbars/jquery.toolbar.min.js"></script>
+	<script type="text/javascript" src="js/file.js"></script>
+	<script>
+		$('#file').toolbar({
+			content: '#file-toolbar', 
+			position: 'bottom',
+			hideOnClick: true
 		});
 	</script>
 
