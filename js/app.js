@@ -90,6 +90,14 @@ function fillCircle(ctx,x,y,radius)
     ctx.fill();
 }
 
+function fillCircleEraser(ctx,x,y,radius)
+{
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, 2 * Math.PI, false);
+    ctx.fillStyle = eraserStyle;
+    ctx.fill();
+}
+
 function fillEraser(ctx,x,y,radius)
 {
     var gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
@@ -122,8 +130,8 @@ function drawStyle(ctx,x,y,thickness,tool)
 
         case 1:
             // ERASER //
-            var markerWidth = 20;
-            fillEraser(ctx,x+markerWidth/2,y+markerWidth/2,markerWidth);
+            var markerWidth = 15;
+            fillCircleEraser(ctx,x+markerWidth/2,y+markerWidth/2,markerWidth);
         break;
     }
 
