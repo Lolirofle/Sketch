@@ -9,17 +9,10 @@
 	<script type="text/javascript" src="js/Blob.js"></script>
 	<script type="text/javascript" src="js/filesaver.min.js"></script>
 	<script type="text/javascript" src="js/app.js"></script>
-	<script type="text/javascript" src="js/vendor/mousetrap.js"></script>
 	<script type="text/javascript">
-		Mousetrap.bind('ctrl+z', function(e) {
-			undoStroke();
-		});
-		Mousetrap.bind('ctrl+y', function(e) {
-			redoStroke();
-		});
-
 		window.addEventListener('load',function(){
-			var sketcher = new Sketcher(document.getElementById('drawWindow'));
+			var elem = document.getElementById('drawWindow');
+			elem.sketcher = new Sketcher(elem);
 		});
 	</script>
 
@@ -34,7 +27,7 @@
 		<!-- Actual Drawing Surface -->
 		<canvas id="sketch" class="surface" style="position:absolute;"></canvas>
 		<canvas id="buffer" class="surface" style="position:absolute;display:none;"></canvas>
-		<canvas id="canvas" class="surface" style="position:absolute;"></canvas>
+		<canvas id="canvas" class="surface" tabindex="1" style="position:absolute;"></canvas>
 	</div>
 </body>
 </html>
