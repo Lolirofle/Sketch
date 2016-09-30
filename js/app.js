@@ -62,23 +62,24 @@ function Sketcher(elem){
 		sketcher.currentStroke.tool = sketcher.tool;
 
 		sketcher.canvas.context.fillStyle = sketcher.penStyle;
-		sketcher.lastX = event.clientX;
-		sketcher.lastY = event.clientY;
+		sketcher.lastX = event.offsetX;
+		sketcher.lastY = event.offsetY;
 	};
 
 	this.canvas.elem.onmouseup = function(event){
 		sketcher.isStroking = false;
 
 		sketcher.sketch.context.drawImage(canvas,0,0);
-		sketcher.addStroke();
+		sketcher.addStroke(this.currentStroke);
+		this.currentStroke = null;
 
 		sketcher.canvas.context.clearRect(0,0,canvas.width,canvas.height);
 	}
 
 	this.canvas.elem.onmousemove = function(event){
 		if(sketcher.isStroking){
-			var mouseX = event.clientX;
-			var mouseY = event.clientY;
+			var mouseX = event.offsetX;
+			var mouseY = event.offsetY;
 
 			// find all points between
 			var x1 = mouseX,
@@ -177,12 +178,11 @@ function Sketcher(elem){
 							sketcher.tool
 						);
 					}
-					sketcher.lastX = mouseX;
-					sketcher.lastY = mouseY;
 				break;
 
 			}
-
+			sketcher.lastX = mouseX;
+			sketcher.lastY = mouseY;
 		}
 	}
 	this.resizeCanvas(this.w,this.h);
@@ -287,11 +287,7 @@ Sketcher.prototype.drawStroke = function(context,stroke){
 Sketcher.prototype.drawAllStrokes = function(context){
 	context.clearRect(0,0,w,h);
 	this.drawBackground(context);
-	context.fillStyle = this.penStyle;
-	for (var i = 0; i < this.strokes.length; i += 1){
-		var s = this.strokes[i];
-		this.drawStroke(context,s);
-	}
+	this.drawAllStrokesNoClear(context);	
 }
 Sketcher.prototype.drawAllStrokesNoClear = function(context){
 	context.fillStyle = this.penStyle;
@@ -309,11 +305,10 @@ Sketcher.prototype.undoStroke = function(){
 	}
 }
 
-Sketcher.prototype.addStroke = function(){
-	if(this.currentStroke.x.length > 2){
+Sketcher.prototype.addStroke = function(stroke){
+	if(strokje.x.length > 2){
 		this.redoStrokesStack = [];
-		this.strokes.push(this.currentStroke);
-		this.currentStroke = null;
+		this.strokes.push(stroke);
 
 		if(this.strokes.length > this.undoLimit){
 			this.strokes.reverse();
@@ -330,6 +325,9 @@ Sketcher.prototype.addStroke = function(){
 
 		}
 		//this.drawAllStrokes(this.sketch.context);
+		return true;
+	}else{
+		return false;
 	}
 
 }
