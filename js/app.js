@@ -21,17 +21,15 @@ function Sketcher(elem){
 	this.canvas.context = this.canvas.elem.getContext("2d");
 
 	//States
-	this.strokes = new History();
-	this.currentStroke = null;
+	this.actions = new History(); //History[*Action] (Stack-like structure of *Actions)
+	this.currentAction = null; //*Action
 	this.mousePreviousX = 0;
 	this.mousePreviousY = 0;
 	this.mousePreviousMoveTime = 0;
+	this.tool = Sketcher.Tool.Pen; //Tool
 
 	//Settings
-	this.lineThickness = 10; //px
-	this.color = "#000000"; //CssColor (CanvasContext.fillStyle)
-	this.undoLimit = 16;           //UInt
-	this.tool = Sketcher.Tool.Pen; //Tool
+	this.settings = new Sketcher.Settings();
 
 	//Intialization
 	this.canvas.elem.onkeydown = function(event){
@@ -39,17 +37,17 @@ function Sketcher(elem){
 			case 90://z
 				if(event.ctrlKey){
 					if(event.shiftKey){
-						sketcher.redoStroke();
-					}else if(sketcher.currentStroke!==null){
+						sketcher.redoAction();
+					}else if(sketcher.currentAction!==null){
 						sketcher.resetCurrentStroke();
 					}else{
-						sketcher.undoStroke();
+						sketcher.undoAction();
 					}
 				}
 				break;
 			case 89://y
 				if(event.ctrlKey){
-					sketcher.redoStroke();
+					sketcher.redoAction();
 				}
 				break;
 			case 80://p
@@ -61,19 +59,19 @@ function Sketcher(elem){
 		}
 	};
 	this.canvas.elem.onmousedown = function(event){
-		//Prepare for the new stroke
-		sketcher.currentStroke = new Stroke();
-		sketcher.currentStroke.tool = sketcher.tool;
-		sketcher.currentStroke.initialTime = Date.now();
-		switch(sketcher.tool){
-			case Sketcher.Tool.Pen:
-				sketcher.currentStroke.toolData = {color: sketcher.color};
-				break;
+		//Tool action
+		if(typeof sketcher.tool.action!=="undefined"){
+			sketcher.currentAction = sketcher.tool.action(sketcher.tool.applyDirectly? sketcher.sketch.context : sketcher.canvas.context,sketcher.settings);
+			if(sketcher.currentAction!=null){
+				sketcher.currentAction.tool = sketcher.tool;
+			}
 		}
-
-		//Tool specific initialization of context
-		if(sketcher.tool.preDraw != null){
-			sketcher.tool.preDraw(sketcher.canvas.context,this.toolData);
+		//Tool action
+		else if(typeof sketcher.tool.positionalAction!=="undefined"){
+			sketcher.currentAction = sketcher.tool.positionalAction(sketcher.tool.applyDirectly? sketcher.sketch.context : sketcher.canvas.context,event.offsetX,event.offsetY,sketcher.settings);
+			if(sketcher.currentAction!=null){
+				sketcher.currentAction.tool = sketcher.tool;
+			}
 		}
 
 		sketcher.mousePreviousX = event.offsetX;
@@ -82,21 +80,25 @@ function Sketcher(elem){
 	};
 
 	this.canvas.elem.onmouseup = this.canvas.elem.onmouseleave = function(event){
-		if(sketcher.currentStroke!==null){
+		//Releasing a stroke
+		if(sketcher.currentAction!==null && typeof sketcher.tool.stroke!=="undefined"){
+			//If the action was not applied directly to the sketch
 			if(!sketcher.tool.applyDirectly){
-				//Copy the canvas to the sketch canvas
+				//Copy the canvas to the sketch
 				sketcher.sketch.context.drawImage(sketcher.canvas.elem,0,0);
 				sketcher.canvas.context.clearRect(0,0,sketcher.width(),sketcher.height());
 			}
 
-			//Add the current stroke to the history of strokes
-			sketcher.addStroke(sketcher.currentStroke);
-			sketcher.currentStroke = null;
+			//Add the current stroke to the history of strokes (if it is more than a point)
+			if(sketcher.currentAction.x.length>2){
+				sketcher.addAction(sketcher.currentAction);
+			}
+			sketcher.currentAction = null;
 		}
 	}
 
 	this.canvas.elem.onmousemove = function(event){
-		if(sketcher.currentStroke!==null){
+		if(sketcher.currentAction!==null){
 			var mouseX = event.offsetX;
 			var mouseY = event.offsetY;
 
@@ -111,8 +113,8 @@ function Sketcher(elem){
 					//Distance the mouse has moved since last mouse move event
 					var dist = Math.hypot(x2-x1,y2-y1);
 
-					var thickness = sketcher.currentStroke.data.length==0? 1 : sketcher.currentStroke.data[sketcher.currentStroke.data.length-1].thickness;
-					var targetThickness = sketcher.lineThickness/(Math.sqrt(dist/(time-sketcher.mousePreviousMoveTime)+1));
+					var thickness = sketcher.currentAction.data.length==0? 1 : sketcher.currentAction.data[sketcher.currentAction.data.length-1].thickness;
+					var targetThickness = sketcher.settings.lineThickness/(Math.sqrt(dist/(time-sketcher.mousePreviousMoveTime)+1));
 
 					//For each pixel unit distance, draw as a line connecting the two points to get a continuous line
 					for(var i=0; i<dist; i+=1){
@@ -122,16 +124,16 @@ function Sketcher(elem){
 						var data = {thickness: thickness};
 						thickness = Math.max(1,thickness + Math.sign(targetThickness-thickness)/3);
 
-						sketcher.currentStroke.x.push(x);
-						sketcher.currentStroke.y.push(y);
-						sketcher.currentStroke.data.push(data);
-						sketcher.currentStroke.time.push(i==0? time-sketcher.mousePreviousMoveTime : 0);
+						sketcher.currentAction.x.push(x);
+						sketcher.currentAction.y.push(y);
+						sketcher.currentAction.data.push(data);
+						sketcher.currentAction.time.push(i==0? time-sketcher.mousePreviousMoveTime : 0);
 						sketcher.tool.stroke.draw(
 							sketcher.tool.applyDirectly? sketcher.sketch.context : sketcher.canvas.context,
 							x,
 							y,
 							data,
-							sketcher.currentStroke.toolData
+							sketcher.currentAction.toolData
 						);
 					}
 
@@ -146,18 +148,18 @@ function Sketcher(elem){
 						var step = i/dist;
 						var x    = x2*step - x1*(step-1);
 						var y    = y2*step - y1*(step-1);
-						var data = {apothem: 16};
+						var data = {apothem: sketcher.settings.lineThickness};
 
-						sketcher.currentStroke.x.push(x);
-						sketcher.currentStroke.y.push(y);
-						sketcher.currentStroke.data.push(data);
-						sketcher.currentStroke.time.push(i==0? time-sketcher.mousePreviousMoveTime : 0);
+						sketcher.currentAction.x.push(x);
+						sketcher.currentAction.y.push(y);
+						sketcher.currentAction.data.push(data);
+						sketcher.currentAction.time.push(i==0? time-sketcher.mousePreviousMoveTime : 0);
 						sketcher.tool.stroke.draw(
 							sketcher.tool.applyDirectly? sketcher.sketch.context : sketcher.canvas.context,
 							x,
 							y,
 							data,
-							sketcher.currentStroke.toolData
+							sketcher.currentAction.toolData
 						);
 					}
 					break;
@@ -172,10 +174,9 @@ function Sketcher(elem){
 	this.resizeCanvas(this.width(),this.height());
 }
 
-function Stroke(tool){
+function StrokeAction(tool){
 	this.tool = tool;
 	this.toolData = {};
-	this.initialTime = 0;
 
 	this.x    = [];
 	this.y    = [];
@@ -183,10 +184,12 @@ function Stroke(tool){
 	this.data = [];
 }
 
-Stroke.prototype.draw = function(context){
-	if(this.tool.preDraw != null){
-		this.tool.preDraw(context,this.toolData);
+StrokeAction.prototype.draw = function(context){
+	//Pre-stroke action
+	if(this.tool.action != null){
+		this.tool.action(context,this.toolData,null);//TOOO: Null as settings. action is probably not a good abstraction
 	}
+	//Draw all parts of the stroke
 	for(var i=0; i<this.x.length; i+=1){
 		this.tool.stroke.draw(context,this.x[i],this.y[i],this.data[i],this.toolData);
 	}
@@ -197,7 +200,7 @@ Sketcher.prototype.newCanvas = function(){
 	this.sketch.context.clearRect(0,0,this.width(),this.height());
 
 	//Reset states
-	this.strokes = new History();
+	this.actions = new History();
 }
 
 Sketcher.prototype.resizeCanvas = function(w,h){
@@ -208,44 +211,38 @@ Sketcher.prototype.resizeCanvas = function(w,h){
 	this.sketch.elem.height = h;
 }
 
-Sketcher.prototype.drawAllStrokes = function(context){
-	for(var i=0,len=this.strokes.length(); i<len; i+=1){
-		this.strokes.get(i).draw(context);
+Sketcher.prototype.drawAllActions = function(context){
+	for(var i=0,len=this.actions.length(); i<len; i+=1){
+		this.actions.get(i).draw(context);
 	}
 }
 
-Sketcher.prototype.undoStroke = function(){
-	var stroke = this.strokes.pop();
-	if(stroke !== undefined){
+Sketcher.prototype.undoAction = function(){
+	var action = this.actions.pop();
+	if(action !== undefined){
 		this.sketch.context.clearRect(0,0,this.width(),this.height());
-		this.drawAllStrokes(this.sketch.context);
+		this.drawAllActions(this.sketch.context);
 	}
 }
 
-Sketcher.prototype.addStroke = function(stroke){
-	if(stroke.x.length>2){
-		this.strokes.push(stroke);
-		return true;
-	}else{
-		return false;
-	}
-
+Sketcher.prototype.addAction = function(action){
+	this.actions.push(action);
 }
 
-Sketcher.prototype.redoStroke = function(){
-	var stroke = this.strokes.unpop();
-	if(stroke !== undefined){
-		stroke.draw(this.sketch.context);
+Sketcher.prototype.redoAction = function(){
+	var action = this.actions.unpop();
+	if(action !== undefined){
+		action.draw(this.sketch.context);
 	}
 
 }
 
 Sketcher.prototype.resetCurrentStroke = function(){
-	if(this.currentStroke !== null){
-		this.currentStroke = null;
+	if(this.currentAction !== null){
+		this.currentAction = null;
 
 		if(this.tool.applyDirectly){
-			this.drawAllStrokes(this.sketch.context);
+			this.drawAllActions(this.sketch.context);
 		}else{
 			this.canvas.context.clearRect(0,0,this.width(),this.height());
 		}
@@ -266,12 +263,12 @@ Sketcher.prototype.playback = function(context){
 	//Clear everything
 	context.clearRect(0,0,this.width(),this.height());
 
-	//Draw all strokes
-	time_loop({i: 0, len: this.strokes.length()} , function(data){return data.i<data.len;} , function(data,nextFn){
-		var stroke = this_.strokes.get(data.i);
+	//Draw all strokes //TODO: Only handles strokes
+	time_loop({i: 0, len: this.actions.length()} , function(data){return data.i<data.len;} , function(data,nextFn){
+		var stroke = this_.actions.get(data.i);
 
-		if(stroke.tool.preDraw != null){
-			stroke.tool.preDraw(context,stroke.toolData);
+		if(stroke.tool.action != null){
+			stroke.tool.action(context,stroke.toolData,this_.settings);
 		}
 
 		//Draw all individual parts of the strokes
@@ -311,12 +308,37 @@ Sketcher.fillCircle = function(context,x,y,radius,color){
 	context.fill();
 }
 
+Sketcher.Settings = function(){
+	this.lineThickness = 10; //px
+	this.color = "#000000"; //CssColor (CanvasContext.fillStyle)
+}
+
+/**
+ * List of tools
+ * Each tool is a record entry
+ * Each entry have the following possible entries:
+ *   action: (CanvasContext,Sketcher) -> *Action|Null
+ *     Returns an action if the tool action should be saved to the history
+ *   positionalAction: (CanvasContext,x@int,y@int,Sketcher) -> *Action|Null
+ *   stroke:
+ *     draw: (CanvasContext,x@int,y@int,data@Object,toolData@Object)
+ *       Draws part of a stroke.
+ *       x, y, data and toolData are from the StrokeAction
+ *   applyDirectly: bool
+ *     This decides which context that are given to the actions
+ *     Though, all actions must be
+ *     true  => Sketcher.sketch.context are given
+ *     false => Sketcher.sketch.canvas are given
+ */
 Sketcher.Tool = {
 	Pen: {
+		action: function(context,settings){
+			var action = new StrokeAction();
+			action.toolData = {color: settings.color};
+			context.fillStyle = action.toolData.color;
+			return action;
+		},
 		stroke: {
-			preDraw: function(context,toolData){
-				context.fillStyle = toolData.color;
-			},
 			draw: function(context,x,y,data,toolData){
 				Sketcher.fillCircle(context,x+data.thickness/4,y+data.thickness/4,data.thickness/2,toolData.color);
 			},
@@ -324,6 +346,9 @@ Sketcher.Tool = {
 		applyDirectly: false,
 	},
 	Eraser: {
+		action: function(context,settings){
+			return new StrokeAction();
+		},
 		stroke: {
 			draw: function(context,x,y,data,toolData){
 				context.clearRect(
@@ -333,6 +358,14 @@ Sketcher.Tool = {
 					data.apothem
 				);
 			},
+		},
+		applyDirectly: true,
+	},
+	ColorPicker: {
+		positionalAction: function(context,x,y,settings){
+			var rgb = context.getImageData(x,y,1,1).data;
+			settings.color = "#" + ("000000" + ((rgb[0]<<16) | (rgb[1]<<8) | rgb[2]).toString(16)).slice(-6);
+			return null;
 		},
 		applyDirectly: true,
 	},
