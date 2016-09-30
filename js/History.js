@@ -8,10 +8,18 @@ History.prototype.clear = function(){
 	this.pops  = 0;
 }
 
+/**
+ * Number of elements that isn't popped
+ * @return int
+ */
 History.prototype.length = function(){
 	return this.stack.length - this.pops;
 }
 
+/**
+ * Adds an object to the history
+ * @return Object
+ */
 History.prototype.push = function(elem){
 	if(this.pops>0){
 		this.stack.length = this.length()+1;
@@ -22,6 +30,10 @@ History.prototype.push = function(elem){
 	}
 }
 
+/**
+ * Undo
+ * @return Object
+ */
 History.prototype.pop = function(){
 	if(this.stack.length>this.pops){
 		this.pops+=1;
@@ -29,10 +41,18 @@ History.prototype.pop = function(){
 	}
 }
 
+/**
+ * Undo all
+ * @return ()
+ */
 History.prototype.popAll = function(){
 	this.pops = this.stack.length;
 }
 
+/**
+ * Redo
+ * @return Object
+ */
 History.prototype.unpop = function(){
 	if(this.pops>0){
 		this.pops-=1;
@@ -40,6 +60,10 @@ History.prototype.unpop = function(){
 	}
 }
 
+/**
+ * Redo all
+ * @return ()
+ */
 History.prototype.unpopAll = function(){
 	this.pops = 0;
 }
@@ -48,6 +72,10 @@ History.prototype.get = function(index){
 	return this.stack[index];
 }
 
+/**
+ * Element that was pushed latest and not popped
+ * @return ()
+ */
 History.prototype.latest = function(){
 	return this.stack[this.length()-1];
 }

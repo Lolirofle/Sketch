@@ -1,34 +1,38 @@
+"use strict";
+
 function Sketcher(elem){
 	var sketcher = this;
 
 	//Elements
-	this.canvas = {};
-	this.canvas.elem    = document.getElementById("canvas");
-	this.canvas.context = this.canvas.elem.getContext("2d");
-
-	this.sketch = {};
-	this.sketch.elem    = document.getElementById("sketch");
+	this.elem = elem;
+	this.sketch = {};//The drawing
+	this.sketch.elem = document.createElement("CANVAS");
+		this.sketch.elem.classList.add('sketcher-sketch');
+		this.sketch.elem.style.position = 'absolute';
+		elem.appendChild(this.sketch.elem);
 	this.sketch.context = this.sketch.elem.getContext("2d");
 
+	this.canvas = {};//Temporary draw surface
+	this.canvas.elem = document.createElement("CANVAS");
+		this.canvas.elem.classList.add('sketcher-canvas');
+		this.canvas.elem.style.position = 'absolute';
+		this.canvas.elem.tabIndex = 1;
+		elem.appendChild(this.canvas.elem);
+	this.canvas.context = this.canvas.elem.getContext("2d");
+
 	//States
-	this.w = 1200;
-	this.h = 1600;
 	this.strokes = new History();
 	this.currentStroke = null;
 	this.mousePreviousX = 0;
 	this.mousePreviousY = 0;
 
 	//Settings
-	this.lineThickness = 5; //px
-	this.thicknessEase = 3;
-	this.maxThickness = 10; //px
-	this.penStyle    = "rgba(0,0,0,0.5)";       //CanvasContext.fillStyle
-	this.fadeStyle   = "rgba(0,0,0,0)";         //CanvasContext.fillStyle
-	this.backStyle   = "rgba(240,240,240,1)";   //CanvasContext.fillStyle
-	this.eraserStyle = "rgba(240,240,240,0.3)"; //CanvasContext.fillStyle
-	this.fadeBack    = "rgba(240,240,240,0)";
-	this.undoLimit = 16; //UInt
-	this.tool = Tool.Pen; //Tool
+	this.lineThickness = 2; //px
+	this.thicknessEase = 2;
+	this.maxThickness  = 8; //px
+	this.color = "#000000"; //CssColor (CanvasContext.fillStyle)
+	this.undoLimit = 16;           //UInt
+	this.tool = Sketcher.Tool.Pen; //Tool
 
 	//Intialization
 	this.canvas.elem.onkeydown = function(event){
@@ -37,6 +41,8 @@ function Sketcher(elem){
 				if(event.ctrlKey){
 					if(event.shiftKey){
 						sketcher.redoStroke();
+					}else if(sketcher.currentStroke!==null){
+						sketcher.resetCurrentStroke();
 					}else{
 						sketcher.undoStroke();
 					}
@@ -47,24 +53,41 @@ function Sketcher(elem){
 					sketcher.redoStroke();
 				}
 				break;
+			case 27://Escape
+				sketcher.resetCurrentStroke();
+				break;
 		}
 	};
 	this.canvas.elem.onmousedown = function(event){
+		//Prepare for the new stroke
 		sketcher.currentStroke = new Stroke();
 		sketcher.currentStroke.tool = sketcher.tool;
+		switch(sketcher.tool){
+			case Sketcher.Tool.Pen:
+				sketcher.currentStroke.toolData = {color: sketcher.color};
+				break;
+		}
 
-		sketcher.canvas.context.fillStyle = sketcher.penStyle;
+		//Tool specific initialization of context
+		if(sketcher.tool.preDraw != null){
+			sketcher.tool.preDraw(sketcher.canvas.context,this.toolData);
+		}
+
 		sketcher.mousePreviousX = event.offsetX;
 		sketcher.mousePreviousY = event.offsetY;
 	};
 
-	this.canvas.elem.onmouseup = function(event){
+	this.canvas.elem.onmouseup = this.canvas.elem.onmouseleave = function(event){
 		if(sketcher.currentStroke!==null){
-			sketcher.sketch.context.drawImage(canvas,0,0);
+			if(!sketcher.tool.applyDirectly){
+				//Copy the canvas to the sketch canvas
+				sketcher.sketch.context.drawImage(sketcher.canvas.elem,0,0);
+				sketcher.canvas.context.clearRect(0,0,sketcher.width(),sketcher.height());
+			}
+
+			//Add the current stroke to the history of strokes
 			sketcher.addStroke(sketcher.currentStroke);
 			sketcher.currentStroke = null;
-
-			sketcher.canvas.context.clearRect(0,0,canvas.width,canvas.height);
 		}
 	}
 
@@ -74,45 +97,45 @@ function Sketcher(elem){
 			var mouseY = event.offsetY;
 
 			// find all points between
-			var x1 = mouseX,
-				x2 = sketcher.mousePreviousX,
-				y1 = mouseY,
-				y2 = sketcher.mousePreviousY;
+			var x1 = sketcher.mousePreviousX,
+				y1 = sketcher.mousePreviousY,
+				x2 = mouseX,
+				y2 = mouseY;
 
 			switch(sketcher.tool){
-				case Tool.Pen:
-					var steep = (Math.abs(y2 - y1) > Math.abs(x2 - x1));
+				case Sketcher.Tool.Pen:
+					var steep = (Math.abs(y1 - y2) > Math.abs(x1 - x2));
 					if(steep){
-						var x = x1;
-						x1 = y1;
-						y1 = x;
-
-						var y = y2;
-						y2 = x2;
-						x2 = y;
-					}
-					if(x1 > x2){
-						var x = x1;
-						x1 = x2;
-						x2 = x;
+						var x = x2;
+						x2 = y2;
+						y2 = x;
 
 						var y = y1;
-						y1 = y2;
-						y2 = y;
+						y1 = x1;
+						x1 = y;
+					}
+					if(x2 > x1){
+						var x = x2;
+						x2 = x1;
+						x1 = x;
+
+						var y = y2;
+						y2 = y1;
+						y1 = y;
 					}
 
-					var dx = x2 - x1,
-						dy = Math.abs(y2 - y1),
+					var dx = x1 - x2,
+						dy = Math.abs(y1 - y2),
 						error = 0,
 						de = dy / dx,
 						yStep = -1,
-						y = y1;
+						y = y2;
 
-					if(y1 < y2){
+					if(y2 < y1){
 						yStep = 1;
 					}
 
-					var targetLineThickness = sketcher.maxThickness - Math.sqrt((x2 - x1) *(x2-x1) + (y2 - y1) * (y2-y1))/(10);
+					var targetLineThickness = sketcher.maxThickness - Math.hypot(x2-x1,y2-y1)/10;
 					if(sketcher.lineThickness > targetLineThickness + sketcher.thicknessEase){
 						sketcher.lineThickness -= sketcher.thicknessEase;
 					}
@@ -126,17 +149,17 @@ function Sketcher(elem){
 						sketcher.lineThickness = 1;
 					}
 
-					for (var x = x1; x < x2; x++){
+					for (var x = x2; x < x1; x++){
 						if(steep){
 							sketcher.currentStroke.x.push(y);
 							sketcher.currentStroke.y.push(x);
-							sketcher.currentStroke.thickness.push(sketcher.lineThickness);
-							sketcher.drawWithStyle(sketcher.canvas.context,y,x,sketcher.lineThickness,sketcher.tool);
+							sketcher.currentStroke.data.push({thickness: sketcher.lineThickness});
+							sketcher.tool.stroke.draw(sketcher.canvas.context,y,x,{thickness: sketcher.lineThickness},sketcher.currentStroke.toolData);
 						} else{
 							sketcher.currentStroke.x.push(x);
 							sketcher.currentStroke.y.push(y);
-							sketcher.currentStroke.thickness.push(sketcher.lineThickness);
-							sketcher.drawWithStyle(sketcher.canvas.context,x,y,sketcher.lineThickness,sketcher.tool);
+							sketcher.currentStroke.data.push({thickness: sketcher.lineThickness});
+							sketcher.tool.stroke.draw(sketcher.canvas.context,x,y,{thickness: sketcher.lineThickness},sketcher.currentStroke.toolData);
 						}
 
 						error += de;
@@ -146,58 +169,69 @@ function Sketcher(elem){
 						}
 					}
 
-
 					sketcher.mousePreviousX = mouseX;
 					sketcher.mousePreviousY = mouseY;
-				break;
 
-				case Tool.Eraser:
-					// the distance the mouse has moved since last mousemove event
-					var dis = Math.sqrt(Math.pow(sketcher.mousePreviousX-x,2)+Math.pow(sketcher.mousePreviousY-y,2));
+					break;
 
-					// for each pixel distance,draw a circle on the line connecting the two points
-					// to get a continous line.
-					for (i=0;i<dis;i+=1){
-						var s = i/dis;
-						sketcher.currentStroke.x.push(sketcher.mousePreviousX*s + mouseX*(1-s));
-						sketcher.currentStroke.y.push(sketcher.mousePreviousY*s + mouseY*(1-s));
-						sketcher.currentStroke.thickness.push(w);
-						sketcher.drawWithStyle(
-							context,
-							sketcher.mousePreviousX*s + mouseX*(1-s),
-							sketcher.mousePreviousY*s + mouseY*(1-s),
-							w,
-							sketcher.tool
+				case Sketcher.Tool.Eraser:
+					//Distance the mouse has moved since last mouse move event
+					var dist = Math.hypot(x2-x1,y2-y1);
+
+					//For each pixel unit distance, draw as a line connecting the two points to get a continuous line
+					for(var i=0; i<dist; i+=1){
+						var step = i/dist;
+						var x    = x2*step - x1*(step-1);
+						var y    = y2*step - y1*(step-1);
+						var data = {apothem: 16};
+
+						sketcher.currentStroke.x.push(x);
+						sketcher.currentStroke.y.push(y);
+						sketcher.currentStroke.data.push(data);
+						sketcher.tool.stroke.draw(
+							sketcher.tool.applyDirectly? sketcher.sketch.context : sketcher.canvas.context,
+							x,
+							y,
+							data,
+							{}
 						);
 					}
-				break;
-
+					break;
 			}
 			sketcher.mousePreviousX = mouseX;
 			sketcher.mousePreviousY = mouseY;
 		}
 	}
-	this.resizeCanvas(this.w,this.h);
-	this.drawBackground(this.sketch.context);
 
-	//window.addEventListener('resize',this.resizeCanvas(),false);
+	//Initialize canvas
+	this.resizeCanvas(this.width(),this.height());
 }
 
-function Stroke(){
-	this.x = [];
-	this.y = [];
-	this.thickness = [];
-	this.tool = Tool.Pen;
+function Stroke(tool){
+	this.tool = tool;
+	this.toolData = {};
+
+	this.x    = [];
+	this.y    = [];
+	this.data = [];
+}
+
+Stroke.prototype.draw = function(context){
+	if(this.tool.preDraw != null){
+		this.tool.preDraw(context,this.toolData);
+	}
+	for(var i=0; i<this.x.length; i+=1){
+		this.tool.stroke.draw(context,this.x[i],this.y[i],this.data[i],this.toolData);
+	}
 }
 
 Sketcher.prototype.newCanvas = function(){
 	//Clear
-	this.drawBackground(this.sketch.context);
+	this.sketch.context.clearRect(0,0,this.width(),this.height());
 
 	//Reset states
 	this.strokes = new History();
 }
-
 
 Sketcher.prototype.resizeCanvas = function(w,h){
 	this.canvas.elem.width  = w;
@@ -207,89 +241,17 @@ Sketcher.prototype.resizeCanvas = function(w,h){
 	this.sketch.elem.height = h;
 }
 
-Sketcher.prototype.fillCircle = function(context,x,y,radius){
-	context.beginPath();
-	context.arc(x,y,radius,0,2 * Math.PI,false);
-	context.fillStyle = this.penStyle;
-	context.fill();
-}
-
-Sketcher.prototype.fillCircleEraser = function(context,x,y,radius){
-	context.beginPath();
-	context.arc(x,y,radius,0,2 * Math.PI,false);
-	context.fillStyle = this.eraserStyle;
-	context.fill();
-}
-
-Sketcher.prototype.fillEraser = function(context,x,y,radius){
-	var gradient = context.createRadialGradient(x,y,0,x,y,radius);
-	gradient.addColorStop(0,this.eraserStyle);
-	gradient.addColorStop(1,this.fadeBack);
-
-	context.beginPath();
-	context.arc(x,y,w,0,2 * Math.PI);
-	context.fillStyle = gradient;
-	context.fill();
-	context.closePath();
-}
-
-Sketcher.prototype.drawBackground = function(context){
-	context.clearRect(0,0,this.w,this.h);
-	context.fillStyle = this.backStyle;
-	context.fillRect(0,0,this.w,this.h);
-}
-
-Sketcher.prototype.drawWithStyle = function(context,x,y,thickness,tool){
-	switch(tool){
-		case Tool.Pen:
-			context.fillRect(x,y,thickness,thickness);
-			this.fillCircle(context,x+thickness/4,y+thickness/4,thickness/2);
-		break;
-
-		case Tool.Eraser:
-			var markerWidth = 15;//TODO
-			this.fillCircleEraser(context,x+markerWidth/2,y+markerWidth/2,markerWidth);
-		break;
-	}
-
-	// THIN PEN //
-	//context.fillRect(x,y,thickness,thickness);
-
-	// THIN INK //
-	//context.fillRect(x,y,thickness,thickness);
-	//this.fillCircle(context,x+thickness/4,y+thickness/4,thickness/2);
-
-	// INK PEN
-	//context.fillRect(x,y,thickness,thickness);
-	//this.fillCircle(context,x,y,thickness);
-
-	// MARKER
-
-}
-
-Sketcher.prototype.drawStroke = function(context,stroke){
-	for(var i=0; i<stroke.x.length; i+=1){
-		this.drawWithStyle(context,stroke.x[i],stroke.y[i],stroke.thickness[i],stroke.tool);
-	}
-}
-
 Sketcher.prototype.drawAllStrokes = function(context){
-	context.clearRect(0,0,w,h);
-	this.drawBackground(context);
-	this.drawAllStrokesNoClear(context);
-}
-Sketcher.prototype.drawAllStrokesNoClear = function(context){
-	context.fillStyle = this.penStyle;
 	for(var i=0,len=this.strokes.length(); i<len; i+=1){
-		var s = this.strokes.get(i);
-		this.drawStroke(context,s);
+		this.strokes.get(i).draw(context);
 	}
 }
+
 Sketcher.prototype.undoStroke = function(){
 	var stroke = this.strokes.pop();
 	if(stroke !== undefined){
-		this.drawBackground(this.sketch.context);
-		this.drawAllStrokesNoClear(this.sketch.context);
+		this.sketch.context.clearRect(0,0,this.width(),this.height());
+		this.drawAllStrokes(this.sketch.context);
 	}
 }
 
@@ -302,16 +264,66 @@ Sketcher.prototype.addStroke = function(stroke){
 	}
 
 }
+
 Sketcher.prototype.redoStroke = function(){
 	var stroke = this.strokes.unpop();
 	if(stroke !== undefined){
-		this.drawBackground(this.sketch.context);
-		this.drawAllStrokesNoClear(this.sketch.context);
+		stroke.draw(this.sketch.context);
 	}
 
 }
 
-var Tool = {
-	Pen   : 0,
-	Eraser: 1,
+Sketcher.prototype.resetCurrentStroke = function(){
+	if(this.currentStroke !== null){
+		this.currentStroke = null;
+
+		if(this.tool.applyDirectly){
+			this.drawAllStrokes(this.sketch.context);
+		}else{
+			this.canvas.context.clearRect(0,0,this.width(),this.height());
+		}
+	}
+}
+
+Sketcher.prototype.width = function(){
+	return this.elem.offsetWidth;
+}
+
+Sketcher.prototype.height = function(){
+	return this.elem.offsetHeight;
+}
+
+Sketcher.fillCircle = function(context,x,y,radius,color){
+	context.beginPath();
+	context.arc(x,y,radius,0,2*Math.PI,false);
+	context.fillStyle = color;
+	context.fill();
+}
+
+Sketcher.Tool = {
+	Pen: {
+		stroke: {
+			preDraw: function(context,toolData){
+				context.fillStyle = toolData.color;
+			},
+			draw: function(context,x,y,data,toolData){
+				context.fillRect(x,y,data.thickness,data.thickness);
+				Sketcher.fillCircle(context,x+data.thickness/4,y+data.thickness/4,data.thickness/2,toolData.color);
+			},
+		},
+		applyDirectly: false,
+	},
+	Eraser: {
+		stroke: {
+			draw: function(context,x,y,data,toolData){
+				context.clearRect(
+					x-data.apothem/2,
+					y-data.apothem/2,
+					data.apothem,
+					data.apothem
+				);
+			},
+		},
+		applyDirectly: true,
+	},
 };

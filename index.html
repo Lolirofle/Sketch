@@ -5,7 +5,6 @@
 	<title>Sketch Example</title>
 
 	<link rel="stylesheet" href="css/style.css">
-	<script type="text/javascript" src="js/vendor/jquery-1.9.0.min.js"></script>
 	<script type="text/javascript" src="js/Blob.js"></script>
 	<script type="text/javascript" src="js/History.js"></script>
 	<script type="text/javascript" src="js/filesaver.min.js"></script>
@@ -16,18 +15,23 @@
 			elem.sketcher = new Sketcher(elem);
 		});
 	</script>
+	<style type="text/css">
+		#drawWindow{
+			width:900px;
+			height:640px;
+		}
+	</style>
 
 </head>
 <body>
 	<div id="drawWindow">
-		<!-- Toolbar -->
 		<div id="toolbar">
-			<button type="button" id="pen" onclick="this.parentNode.parentNode.sketcher.tool = Tool.Pen">O</button>
-			<button type="button" id="eraser" onclick="this.parentNode.parentNode.sketcher.tool = Tool.Eraser">X</button>
+			<div id="actions">
+				<input type="button" id="pen" onclick="this.parentNode.parentNode.parentNode.sketcher.tool = Sketcher.Tool.Pen" value="Pen" />
+				<input type="button" id="eraser" onclick="this.parentNode.parentNode.parentNode.sketcher.tool = Sketcher.Tool.Eraser" value="Eraser" />
+			</div>
+			<input type="color" id="color1" onchange="if(/^#[0-9A-F]{6}$/i.test(this.value)){this.parentNode.parentNode.sketcher.color = this.value;}" default="#000000" />
 		</div>
-		<!-- Actual Drawing Surface -->
-		<canvas id="sketch" class="surface" style="position:absolute;"></canvas>
-		<canvas id="canvas" class="surface" tabindex="1" style="position:absolute;"></canvas>
 	</div>
 </body>
 </html>

@@ -1,11 +1,17 @@
 #toolbar {
-	position:fixed;
+	position:absolute;
 	z-index: 1;
-	left: 4px;
-	top: 4px;
 }
 
-#canvas,
-#canvas:active{
+.sketcher-canvas,
+.sketcher-canvas:active{
 	cursor: url("../img/cursor.png") 7 7, crosshair;
+}
+
+.sketcher-canvas{
+	outline:3px solid #eee;
+}
+
+.sketcher-canvas:focus{
+	outline:3px solid #ddd;
 }
