@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 function Sketcher(elem){
 	var sketcher = this;
@@ -25,11 +25,10 @@ function Sketcher(elem){
 	this.currentStroke = null;
 	this.mousePreviousX = 0;
 	this.mousePreviousY = 0;
+	this.mousePreviousMoveTime = 0;
 
 	//Settings
-	this.lineThickness = 2; //px
-	this.thicknessEase = 2;
-	this.maxThickness  = 8; //px
+	this.lineThickness = 10; //px
 	this.color = "#000000"; //CssColor (CanvasContext.fillStyle)
 	this.undoLimit = 16;           //UInt
 	this.tool = Sketcher.Tool.Pen; //Tool
@@ -53,6 +52,9 @@ function Sketcher(elem){
 					sketcher.redoStroke();
 				}
 				break;
+			case 80://p
+				sketcher.playback(sketcher.sketch.context);
+				break;
 			case 27://Escape
 				sketcher.resetCurrentStroke();
 				break;
@@ -62,6 +64,7 @@ function Sketcher(elem){
 		//Prepare for the new stroke
 		sketcher.currentStroke = new Stroke();
 		sketcher.currentStroke.tool = sketcher.tool;
+		sketcher.currentStroke.initialTime = Date.now();
 		switch(sketcher.tool){
 			case Sketcher.Tool.Pen:
 				sketcher.currentStroke.toolData = {color: sketcher.color};
@@ -75,6 +78,7 @@ function Sketcher(elem){
 
 		sketcher.mousePreviousX = event.offsetX;
 		sketcher.mousePreviousY = event.offsetY;
+		sketcher.mousePreviousMoveTime = Date.now();
 	};
 
 	this.canvas.elem.onmouseup = this.canvas.elem.onmouseleave = function(event){
@@ -96,81 +100,40 @@ function Sketcher(elem){
 			var mouseX = event.offsetX;
 			var mouseY = event.offsetY;
 
-			// find all points between
 			var x1 = sketcher.mousePreviousX,
 				y1 = sketcher.mousePreviousY,
 				x2 = mouseX,
 				y2 = mouseY;
+			var time = Date.now();
 
 			switch(sketcher.tool){
 				case Sketcher.Tool.Pen:
-					var steep = (Math.abs(y1 - y2) > Math.abs(x1 - x2));
-					if(steep){
-						var x = x2;
-						x2 = y2;
-						y2 = x;
+					//Distance the mouse has moved since last mouse move event
+					var dist = Math.hypot(x2-x1,y2-y1);
 
-						var y = y1;
-						y1 = x1;
-						x1 = y;
-					}
-					if(x2 > x1){
-						var x = x2;
-						x2 = x1;
-						x1 = x;
+					var thickness = sketcher.currentStroke.data.length==0? 1 : sketcher.currentStroke.data[sketcher.currentStroke.data.length-1].thickness;
+					var targetThickness = sketcher.lineThickness/(Math.sqrt(dist/(time-sketcher.mousePreviousMoveTime)+1));
 
-						var y = y2;
-						y2 = y1;
-						y1 = y;
-					}
+					//For each pixel unit distance, draw as a line connecting the two points to get a continuous line
+					for(var i=0; i<dist; i+=1){
+						var step = i/dist;
+						var x    = x2*step - x1*(step-1);
+						var y    = y2*step - y1*(step-1);
+						var data = {thickness: thickness};
+						thickness = Math.max(1,thickness + Math.sign(targetThickness-thickness)/3);
 
-					var dx = x1 - x2,
-						dy = Math.abs(y1 - y2),
-						error = 0,
-						de = dy / dx,
-						yStep = -1,
-						y = y2;
-
-					if(y2 < y1){
-						yStep = 1;
+						sketcher.currentStroke.x.push(x);
+						sketcher.currentStroke.y.push(y);
+						sketcher.currentStroke.data.push(data);
+						sketcher.currentStroke.time.push(i==0? time-sketcher.mousePreviousMoveTime : 0);
+						sketcher.tool.stroke.draw(
+							sketcher.tool.applyDirectly? sketcher.sketch.context : sketcher.canvas.context,
+							x,
+							y,
+							data,
+							sketcher.currentStroke.toolData
+						);
 					}
-
-					var targetLineThickness = sketcher.maxThickness - Math.hypot(x2-x1,y2-y1)/10;
-					if(sketcher.lineThickness > targetLineThickness + sketcher.thicknessEase){
-						sketcher.lineThickness -= sketcher.thicknessEase;
-					}
-					else if(sketcher.lineThickness < targetLineThickness - sketcher.thicknessEase){
-						sketcher.lineThickness += sketcher.thicknessEase;
-					}
-					else{
-						sketcher.lineThickness = targetLineThickness;
-					}
-					if(sketcher.lineThickness < 1){
-						sketcher.lineThickness = 1;
-					}
-
-					for (var x = x2; x < x1; x++){
-						if(steep){
-							sketcher.currentStroke.x.push(y);
-							sketcher.currentStroke.y.push(x);
-							sketcher.currentStroke.data.push({thickness: sketcher.lineThickness});
-							sketcher.tool.stroke.draw(sketcher.canvas.context,y,x,{thickness: sketcher.lineThickness},sketcher.currentStroke.toolData);
-						} else{
-							sketcher.currentStroke.x.push(x);
-							sketcher.currentStroke.y.push(y);
-							sketcher.currentStroke.data.push({thickness: sketcher.lineThickness});
-							sketcher.tool.stroke.draw(sketcher.canvas.context,x,y,{thickness: sketcher.lineThickness},sketcher.currentStroke.toolData);
-						}
-
-						error += de;
-						if(error >= 0.5){
-							y += yStep;
-							error -= 1.0;
-						}
-					}
-
-					sketcher.mousePreviousX = mouseX;
-					sketcher.mousePreviousY = mouseY;
 
 					break;
 
@@ -188,16 +151,18 @@ function Sketcher(elem){
 						sketcher.currentStroke.x.push(x);
 						sketcher.currentStroke.y.push(y);
 						sketcher.currentStroke.data.push(data);
+						sketcher.currentStroke.time.push(i==0? time-sketcher.mousePreviousMoveTime : 0);
 						sketcher.tool.stroke.draw(
 							sketcher.tool.applyDirectly? sketcher.sketch.context : sketcher.canvas.context,
 							x,
 							y,
 							data,
-							{}
+							sketcher.currentStroke.toolData
 						);
 					}
 					break;
 			}
+			sketcher.mousePreviousMoveTime = time;
 			sketcher.mousePreviousX = mouseX;
 			sketcher.mousePreviousY = mouseY;
 		}
@@ -210,9 +175,11 @@ function Sketcher(elem){
 function Stroke(tool){
 	this.tool = tool;
 	this.toolData = {};
+	this.initialTime = 0;
 
 	this.x    = [];
 	this.y    = [];
+	this.time = [];
 	this.data = [];
 }
 
@@ -293,6 +260,50 @@ Sketcher.prototype.height = function(){
 	return this.elem.offsetHeight;
 }
 
+Sketcher.prototype.playback = function(context){
+	var this_ = this;
+
+	//Clear everything
+	context.clearRect(0,0,this.width(),this.height());
+
+	//Draw all strokes
+	time_loop({i: 0, len: this.strokes.length()} , function(data){return data.i<data.len;} , function(data,nextFn){
+		var stroke = this_.strokes.get(data.i);
+
+		if(stroke.tool.preDraw != null){
+			stroke.tool.preDraw(context,stroke.toolData);
+		}
+
+		//Draw all individual parts of the strokes
+		time_loop({i: 0, len: stroke.x.length} , function(data){return data.i<data.len;} , function(data,nextFn){
+			stroke.tool.stroke.draw(context,stroke.x[data.i],stroke.y[data.i],stroke.data[data.i],stroke.toolData);
+			data.i+=1;
+			nextFn(data,stroke.time[data.i++]);
+		},function(){
+			data.i+=1;
+			nextFn(data,300);
+		});
+	},null);
+}
+
+function time_loop(data,predicateFn,fn,endFn){
+	if(predicateFn(data)){(function loop(){
+		fn(data,function(data,nextTime){
+			if(predicateFn(data)){
+				if(nextTime==0){
+					loop();
+				}else{
+					window.setTimeout(loop,nextTime);
+				}
+			}else{
+				if(endFn!==null){
+					endFn();
+				}
+			}
+		});
+	})();}
+}
+
 Sketcher.fillCircle = function(context,x,y,radius,color){
 	context.beginPath();
 	context.arc(x,y,radius,0,2*Math.PI,false);
@@ -307,7 +318,6 @@ Sketcher.Tool = {
 				context.fillStyle = toolData.color;
 			},
 			draw: function(context,x,y,data,toolData){
-				context.fillRect(x,y,data.thickness,data.thickness);
 				Sketcher.fillCircle(context,x+data.thickness/4,y+data.thickness/4,data.thickness/2,toolData.color);
 			},
 		},
