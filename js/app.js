@@ -6,23 +6,17 @@ function Sketcher(elem){
 	this.canvas.elem    = document.getElementById("canvas");
 	this.canvas.context = this.canvas.elem.getContext("2d");
 
-	this.buffer = {};
-	this.buffer.elem    = document.getElementById("buffer");
-	this.buffer.context = this.buffer.elem.getContext("2d");
-
 	this.sketch = {};
 	this.sketch.elem    = document.getElementById("sketch");
 	this.sketch.context = this.sketch.elem.getContext("2d");
 
 	//States
-	this.isStroking = false;
 	this.w = 1200;
 	this.h = 1600;
-	this.strokes = [];
-	this.currentStroke;
-	this.redoStrokesStack = [];
-	this.lastX = 0;
-	this.lastY = 0;
+	this.strokes = new History();
+	this.currentStroke = null;
+	this.mousePreviousX = 0;
+	this.mousePreviousY = 0;
 
 	//Settings
 	this.lineThickness = 5; //px
@@ -56,36 +50,34 @@ function Sketcher(elem){
 		}
 	};
 	this.canvas.elem.onmousedown = function(event){
-		sketcher.isStroking = true;
-
 		sketcher.currentStroke = new Stroke();
 		sketcher.currentStroke.tool = sketcher.tool;
 
 		sketcher.canvas.context.fillStyle = sketcher.penStyle;
-		sketcher.lastX = event.offsetX;
-		sketcher.lastY = event.offsetY;
+		sketcher.mousePreviousX = event.offsetX;
+		sketcher.mousePreviousY = event.offsetY;
 	};
 
 	this.canvas.elem.onmouseup = function(event){
-		sketcher.isStroking = false;
+		if(sketcher.currentStroke!==null){
+			sketcher.sketch.context.drawImage(canvas,0,0);
+			sketcher.addStroke(sketcher.currentStroke);
+			sketcher.currentStroke = null;
 
-		sketcher.sketch.context.drawImage(canvas,0,0);
-		sketcher.addStroke(this.currentStroke);
-		this.currentStroke = null;
-
-		sketcher.canvas.context.clearRect(0,0,canvas.width,canvas.height);
+			sketcher.canvas.context.clearRect(0,0,canvas.width,canvas.height);
+		}
 	}
 
 	this.canvas.elem.onmousemove = function(event){
-		if(sketcher.isStroking){
+		if(sketcher.currentStroke!==null){
 			var mouseX = event.offsetX;
 			var mouseY = event.offsetY;
 
 			// find all points between
 			var x1 = mouseX,
-				x2 = sketcher.lastX,
+				x2 = sketcher.mousePreviousX,
 				y1 = mouseY,
-				y2 = sketcher.lastY;
+				y2 = sketcher.mousePreviousY;
 
 			switch(sketcher.tool){
 				case Tool.Pen:
@@ -155,25 +147,25 @@ function Sketcher(elem){
 					}
 
 
-					sketcher.lastX = mouseX;
-					sketcher.lastY = mouseY;
+					sketcher.mousePreviousX = mouseX;
+					sketcher.mousePreviousY = mouseY;
 				break;
 
 				case Tool.Eraser:
 					// the distance the mouse has moved since last mousemove event
-					var dis = Math.sqrt(Math.pow(sketcher.lastX-x,2)+Math.pow(sketcher.lastY-y,2));
+					var dis = Math.sqrt(Math.pow(sketcher.mousePreviousX-x,2)+Math.pow(sketcher.mousePreviousY-y,2));
 
 					// for each pixel distance,draw a circle on the line connecting the two points
 					// to get a continous line.
 					for (i=0;i<dis;i+=1){
 						var s = i/dis;
-						sketcher.currentStroke.x.push(sketcher.lastX*s + mouseX*(1-s));
-						sketcher.currentStroke.y.push(sketcher.lastY*s + mouseY*(1-s));
+						sketcher.currentStroke.x.push(sketcher.mousePreviousX*s + mouseX*(1-s));
+						sketcher.currentStroke.y.push(sketcher.mousePreviousY*s + mouseY*(1-s));
 						sketcher.currentStroke.thickness.push(w);
 						sketcher.drawWithStyle(
 							context,
-							sketcher.lastX*s + mouseX*(1-s),
-							sketcher.lastY*s + mouseY*(1-s),
+							sketcher.mousePreviousX*s + mouseX*(1-s),
+							sketcher.mousePreviousY*s + mouseY*(1-s),
 							w,
 							sketcher.tool
 						);
@@ -181,8 +173,8 @@ function Sketcher(elem){
 				break;
 
 			}
-			sketcher.lastX = mouseX;
-			sketcher.lastY = mouseY;
+			sketcher.mousePreviousX = mouseX;
+			sketcher.mousePreviousY = mouseY;
 		}
 	}
 	this.resizeCanvas(this.w,this.h);
@@ -199,23 +191,20 @@ function Stroke(){
 }
 
 Sketcher.prototype.newCanvas = function(){
-	this.buffer.context.clearRect(0,0,this.w,this.h);
-	this.buffer.context.drawImage(this.sketch.elem,0,0);
+	//Clear
 	this.drawBackground(this.sketch.context);
 
-	this.strokes = [];
-	this.redoStrokesStack = [];
+	//Reset states
+	this.strokes = new History();
 }
 
 
 Sketcher.prototype.resizeCanvas = function(w,h){
 	this.canvas.elem.width  = w;
-	this.buffer.elem.width  = w;
 	this.sketch.elem.width  = w;
 
 	this.canvas.elem.height = h;
 	this.sketch.elem.height = h;
-	this.buffer.elem.height = h;
 }
 
 Sketcher.prototype.fillCircle = function(context,x,y,radius){
@@ -279,7 +268,7 @@ Sketcher.prototype.drawWithStyle = function(context,x,y,thickness,tool){
 }
 
 Sketcher.prototype.drawStroke = function(context,stroke){
-	for (var i = 0; i < stroke.x.length; i += 1){
+	for(var i=0; i<stroke.x.length; i+=1){
 		this.drawWithStyle(context,stroke.x[i],stroke.y[i],stroke.thickness[i],stroke.tool);
 	}
 }
@@ -287,44 +276,26 @@ Sketcher.prototype.drawStroke = function(context,stroke){
 Sketcher.prototype.drawAllStrokes = function(context){
 	context.clearRect(0,0,w,h);
 	this.drawBackground(context);
-	this.drawAllStrokesNoClear(context);	
+	this.drawAllStrokesNoClear(context);
 }
 Sketcher.prototype.drawAllStrokesNoClear = function(context){
 	context.fillStyle = this.penStyle;
-	for (var i = 0; i < this.strokes.length; i += 1){
-		var s = this.strokes[i];
+	for(var i=0,len=this.strokes.length(); i<len; i+=1){
+		var s = this.strokes.get(i);
 		this.drawStroke(context,s);
 	}
 }
 Sketcher.prototype.undoStroke = function(){
-	if(this.strokes.length>0){
+	var stroke = this.strokes.pop();
+	if(stroke !== undefined){
 		this.drawBackground(this.sketch.context);
-		this.redoStrokesStack.push(this.strokes.pop());
-		this.sketch.context.drawImage(this.buffer.elem,0,0);
 		this.drawAllStrokesNoClear(this.sketch.context);
 	}
 }
 
 Sketcher.prototype.addStroke = function(stroke){
-	if(strokje.x.length > 2){
-		this.redoStrokesStack = [];
+	if(stroke.x.length>2){
 		this.strokes.push(stroke);
-
-		if(this.strokes.length > this.undoLimit){
-			this.strokes.reverse();
-			var oldStroke = this.strokes.pop();
-			this.strokes.reverse();
-
-			this.drawStroke(this.buffer.context,oldStroke);
-		}
-		else{
-			/*if(newlyCreated){
-				this.buffer.context.clearRect(0,0,w,h);
-				newlyCreated = false;
-			}*/
-
-		}
-		//this.drawAllStrokes(this.sketch.context);
 		return true;
 	}else{
 		return false;
@@ -332,10 +303,9 @@ Sketcher.prototype.addStroke = function(stroke){
 
 }
 Sketcher.prototype.redoStroke = function(){
-	if(this.redoStrokesStack.length>0){
+	var stroke = this.strokes.unpop();
+	if(stroke !== undefined){
 		this.drawBackground(this.sketch.context);
-		this.strokes.push(this.redoStrokesStack.pop());
-		this.sketch.context.drawImage(this.buffer.elem,0,0);
 		this.drawAllStrokesNoClear(this.sketch.context);
 	}
 
