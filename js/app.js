@@ -332,6 +332,7 @@ Sketcher.Settings = function(){
  */
 Sketcher.Tool = {
 	Pen: {
+		id: "Pen",
 		action: function(context,settings){
 			var action = new StrokeAction();
 			action.toolData = {color: settings.color};
@@ -346,6 +347,7 @@ Sketcher.Tool = {
 		applyDirectly: false,
 	},
 	Eraser: {
+		id: "Eraser",
 		action: function(context,settings){
 			return new StrokeAction();
 		},
@@ -362,6 +364,7 @@ Sketcher.Tool = {
 		applyDirectly: true,
 	},
 	ColorPicker: {
+		id: "ColorPicker",
 		positionalAction: function(context,x,y,settings){
 			var rgb = context.getImageData(x,y,1,1).data;
 			settings.color = "#" + ("000000" + ((rgb[0]<<16) | (rgb[1]<<8) | rgb[2]).toString(16)).slice(-6);

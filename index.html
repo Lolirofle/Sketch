@@ -4,10 +4,7 @@
 	<meta charset="utf-8">
 	<title>Sketch Example</title>
 
-	<link rel="stylesheet" href="css/style.css">
-	<script type="text/javascript" src="js/Blob.js"></script>
 	<script type="text/javascript" src="js/History.js"></script>
-	<script type="text/javascript" src="js/filesaver.min.js"></script>
 	<script type="text/javascript" src="js/app.js"></script>
 	<script type="text/javascript">
 		window.addEventListener('load',function(){
@@ -16,10 +13,32 @@
 		});
 	</script>
 	<style type="text/css">
+		body{
+			background-color:#fafafa;
+		}
 		#drawWindow{
 			width:900px;
 			height:640px;
 		}
+
+		#toolbar {
+			position:absolute;
+			z-index: 1;
+		}
+
+		.sketcher-canvas,
+		.sketcher-canvas:active{
+			cursor: url("../img/cursor.png") 7 7, crosshair;
+		}
+
+		.sketcher-canvas{
+			outline:3px solid #ddd;
+		}
+
+		.sketcher-canvas:focus{
+			outline:3px solid #ccc;
+		}
+
 	</style>
 
 </head>
@@ -30,10 +49,16 @@
 				<input type="button" id="pen" onclick="this.parentNode.parentNode.parentNode.sketcher.tool = Sketcher.Tool.Pen" value="Pen" />
 				<input type="button" id="eraser" onclick="this.parentNode.parentNode.parentNode.sketcher.tool = Sketcher.Tool.Eraser" value="Eraser" />
 				<input type="button" id="colorPicker" onclick="this.parentNode.parentNode.parentNode.sketcher.tool = Sketcher.Tool.ColorPicker" value="Color Picker" />
+				<input type="button" id="savePng" onclick="prompt('PNG data URI:',this.parentNode.parentNode.parentNode.sketcher.sketch.elem.toDataURL());" value="Save PNG" />
+				<input type="button" id="saveActions" onclick="prompt('Actions JSON data:',JSON.stringify(this.parentNode.parentNode.parentNode.sketcher.actions.elements(),function(key,value){if(key=='tool'){return value.id;}else{return value;}}));" value="Save actions" />
 			</div>
 			<input type="color" id="color1" onchange="if(/^#[0-9A-F]{6}$/i.test(this.value)){this.parentNode.parentNode.sketcher.settings.color = this.value;}" value="#000000" />
 			<input type="number" id="size1" onchange="if(/^[0-9]+$/i.test(this.value)){this.parentNode.parentNode.sketcher.settings.lineThickness = this.value;}" value="10" />
 		</div>
 	</div>
+	<p>CTRL+Z: Undo</p>
+	<p>CTRL+Y: Redo</p>
+	<p>CTRL+Shift+Z: Redo</p>
+	<p>P: Playback (from the beginning)</p>
 </body>
 </html>
